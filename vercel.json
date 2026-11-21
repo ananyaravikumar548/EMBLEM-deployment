@@ -4,6 +4,10 @@
   "outputDirectory": "frontend/build",
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "https://emblem-deployment.onrender.com/api/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

@@ -1,6 +1,6 @@
 # Deploy EMBLEM with Vercel, Render, and MongoDB Atlas
 
-The repository is configured for a split deployment: Vercel builds the React app and its `/api/v1` proxy, Render runs the Express API, and Atlas stores brands and accounts. The proxy keeps browser requests and authentication cookies on the Vercel origin.
+The repository is configured for a split deployment: Vercel builds the React app and rewrites `/api/*` requests to Render, Render runs the Express API, and Atlas stores brands and accounts. The rewrite keeps browser requests and authentication cookies on the Vercel origin.
 
 ## 1. Create the Atlas database
 
@@ -27,11 +27,7 @@ After the first successful deploy, copy the Render service origin, such as `http
 
 ## 3. Deploy the frontend on Vercel
 
-Import the deployment repository into Vercel. Keep the project root at the repository root; `vercel.json` sets the Create React App build and `frontend/build` output directory. Add this environment variable to Vercel:
-
-- `BACKEND_URL`: the Render service origin, with no trailing slash and no `/api/v1` suffix
-
-Redeploy after setting the variable. The Vercel function in `api/v1/[...path].js` forwards API traffic and auth cookies to Render. The browser uses the same-origin `/api/v1` default; do not set `REACT_APP_API_URL` to the Render URL for this deployment.
+Import the deployment repository into Vercel. Keep the project root at the repository root; `vercel.json` sets the Create React App build, `frontend/build` output directory, and API rewrite to the Render service. The browser uses the same-origin `/api/v1` default; do not set `REACT_APP_API_URL` to the Render URL for this deployment.
 
 ## Required environment
 
@@ -52,7 +48,7 @@ Optional settings:
 - `GROQ_MODEL`: optionally pin a model that is active for the configured Groq key.
 - `ALLOW_DEMO_LOGIN`: leave unset or `false` in production. The shared demo account is disabled by default in production.
 
-Never commit `.env` files or put API keys in `REACT_APP_*` variables; frontend variables are embedded in public JavaScript bundles. `BACKEND_URL` is server-side and safe to set in Vercel.
+Never commit `.env` files or put API keys in `REACT_APP_*` variables; frontend variables are embedded in public JavaScript bundles.
 
 ## Docker deployment
 
