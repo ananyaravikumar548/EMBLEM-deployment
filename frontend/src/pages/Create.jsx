@@ -137,13 +137,12 @@ export const Create = ({ onComplete }) => {
                   rows={4}
                   value={formData.vision}
                   onChange={(e) => setFormData({ ...formData, vision: e.target.value })}
-                  onKeyDown={handleKeyDown}
                   placeholder="e.g. We build brutalist AI design tools for creative agencies..."
                   className="w-full resize-none bg-transparent text-[15px] leading-7 text-[#302729] placeholder:text-[#b3a7a5] focus:outline-none sm:text-base"
                   autoFocus
                 />
                 <span className="absolute bottom-4 right-6 text-[9px] font-semibold uppercase tracking-[.12em] text-[#b3a7a5]">
-                  Press Enter ↵
+                  Use Continue when you’re ready
                 </span>
               </div>
             </div>
@@ -255,11 +254,13 @@ export const Create = ({ onComplete }) => {
                   rows={3}
                   value={formData.targetAudience}
                   onChange={(e) => setFormData({ ...formData, targetAudience: e.target.value })}
-                  onKeyDown={handleKeyDown}
                   placeholder="e.g. Independent designers and small creative teams"
                   className="w-full resize-none bg-transparent text-[15px] leading-7 text-[#302729] placeholder:text-[#b3a7a5] focus:outline-none sm:text-base"
                   autoFocus
                 />
+                <span className="absolute bottom-4 right-6 text-[9px] font-semibold uppercase tracking-[.12em] text-[#b3a7a5]">
+                  Use Continue when you’re ready
+                </span>
               </div>
             </div>
           )}

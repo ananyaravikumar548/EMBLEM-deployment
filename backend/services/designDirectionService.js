@@ -46,6 +46,27 @@ function validHex(value) {
   return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
 }
 
+function paletteDistance(first = {}, second = {}) {
+  const roles = ['primary', 'secondary', 'accent', 'surface'];
+  const distances = roles.map((role) => {
+    const a = first[role];
+    const b = second[role];
+    if (!validHex(a) || !validHex(b)) return 0;
+    const channelsA = [1, 3, 5].map((offset) => parseInt(a.slice(offset, offset + 2), 16));
+    const channelsB = [1, 3, 5].map((offset) => parseInt(b.slice(offset, offset + 2), 16));
+    return Math.sqrt(channelsA.reduce((sum, value, index) => sum + (value - channelsB[index]) ** 2, 0));
+  });
+  return {
+    average: distances.reduce((sum, distance) => sum + distance, 0) / distances.length,
+    primary: distances[0]
+  };
+}
+
+function palettesAreDistinct(first, second) {
+  const distance = paletteDistance(first, second);
+  return distance.average >= 48 && distance.primary >= 48;
+}
+
 function channels(hex) {
   return [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16) / 255)
     .map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
@@ -211,7 +232,7 @@ function normalizeDesignDirections(rawDirections, options = {}) {
   const usedStyles = new Set();
   const usedFontPairs = new Set();
   const usedMonoFonts = new Set();
-  const usedPalettes = new Set();
+  const usedPalettes = [];
   const seed = hashSeed(options.brandId || `${options.companyName || ''}|${options.industry || ''}`);
   for (let index = 0; index < 5; index += 1) {
     const raw = input[index] || {};
@@ -246,14 +267,59 @@ function normalizeDesignDirections(rawDirections, options = {}) {
       if (alternateMono) candidate.typography.mono.family = alternateMono;
     }
     usedMonoFonts.add(String(candidate.typography.mono?.family || '').toLowerCase());
-    const paletteSignature = ['primary', 'secondary', 'accent', 'surface'].map((role) => candidate.colors[role].toLowerCase()).join('|');
-    if (usedPalettes.has(paletteSignature)) {
-      candidate.colors = generatedFallback(index, { ...options, baseColors: candidate.colors }).colors;
+    if (usedPalettes.some((palette) => !palettesAreDistinct(candidate.colors, palette))) {
+      const brandSeed = options.brandId || `${options.companyName || ''}|${options.industry || ''}`;
+      let bestAlternate = null;
+      let bestMinimumDistance = -1;
+      let bestLeadAlternate = null;
+      let bestLeadDistance = -1;
+      for (let attempt = 1; attempt <= 360; attempt += 1) {
+        const alternate = generatedFallback(index, {
+          ...options,
+          baseColors: undefined,
+          brandId: `${brandSeed}-direction-${index + 1}-${attempt}`
+        });
+        const distances = usedPalettes.map((palette) => paletteDistance(alternate.colors, palette));
+        const minimumDistance = Math.min(...distances.map((distance) => Math.min(distance.average, distance.primary)));
+        const leadDistance = Math.min(distances[0].average, distances[0].primary);
+        if (leadDistance > bestLeadDistance) {
+          bestLeadAlternate = alternate;
+          bestLeadDistance = leadDistance;
+        }
+        if (minimumDistance > bestMinimumDistance) {
+          bestAlternate = alternate;
+          bestMinimumDistance = minimumDistance;
+        }
+        if (usedPalettes.every((palette) => palettesAreDistinct(alternate.colors, palette))) {
+          bestAlternate = alternate;
+          candidate.rationale = {
+            ...candidate.rationale,
+            colors: 'A deliberately different color route gives this identity a distinct mood while retaining readable contrast.'
+          };
+          break;
+        }
+      }
+      const distinctChoice = bestAlternate && palettesAreDistinct(bestAlternate.colors, usedPalettes[0])
+        ? bestAlternate
+        : bestLeadAlternate && palettesAreDistinct(bestLeadAlternate.colors, usedPalettes[0]) ? bestLeadAlternate : null;
+      if (distinctChoice) {
+        candidate.colors = distinctChoice.colors;
+        candidate.rationale = {
+          ...candidate.rationale,
+          colors: 'A deliberately different color route gives this identity a distinct mood while retaining readable contrast.'
+        };
+      }
     }
-    usedPalettes.add(['primary', 'secondary', 'accent', 'surface'].map((role) => candidate.colors[role].toLowerCase()).join('|'));
-    const signature = [candidate.colors.primary, candidate.colors.secondary, candidate.colors.accent, candidate.colors.surface, candidate.typography.display.family, candidate.typography.body.family, candidate.logoStyleToken, candidate.logoMarkId].join('|').toLowerCase();
-    if (signatures.has(signature)) candidate = generatedFallback(index, options);
-    signatures.add([candidate.colors.primary, candidate.colors.secondary, candidate.colors.accent, candidate.colors.surface, candidate.typography.display.family, candidate.typography.body.family, candidate.logoStyleToken].join('|').toLowerCase());
+    usedPalettes.push(candidate.colors);
+    let signature = [candidate.colors.primary, candidate.colors.secondary, candidate.colors.accent, candidate.colors.surface, candidate.typography.display.family, candidate.typography.body.family, candidate.logoStyleToken, candidate.logoMarkId].join('|').toLowerCase();
+    if (signatures.has(signature)) {
+      const colors = candidate.colors;
+      const brandSeed = options.brandId || `${options.companyName || ''}|${options.industry || ''}`;
+      const fallback = generatedFallback(index, { ...options, brandId: `${brandSeed}-identity-${index + 1}` });
+      candidate = { ...candidate, logoStyleToken: fallback.logoStyleToken, logoMarkId: fallback.logoMarkId, typography: fallback.typography, colors };
+      signature = [candidate.colors.primary, candidate.colors.secondary, candidate.colors.accent, candidate.colors.surface, candidate.typography.display.family, candidate.typography.body.family, candidate.logoStyleToken, candidate.logoMarkId].join('|').toLowerCase();
+    }
+    signatures.add(signature);
     directions.push(candidate);
   }
   return directions;

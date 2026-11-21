@@ -1,3 +1,5 @@
+import { buildBrandLogos } from './vectorEngine';
+
 /**
  * EMBLEM Client-side Consistency Scoring Engine
  * Audits Brand DNA and generated assets against strict design guidelines:
@@ -113,7 +115,7 @@ export function auditBrandConsistency(brand) {
   // 1.3 Accent Pop
   const ratioAccentSurface = calculateContrastRatio(accent, surface);
   const ratioAccentPrimary = calculateContrastRatio(accent, primary);
-  const passAccent = ratioAccentSurface >= 2.0 || ratioAccentPrimary >= 2.0;
+  const passAccent = ratioAccentSurface >= 3.0 || ratioAccentPrimary >= 3.0;
   if (passAccent) colorPoints += 1;
   checks.push({
     id: 'color-accent-pop',
@@ -122,7 +124,7 @@ export function auditBrandConsistency(brand) {
     weight: 10,
     passed: passAccent,
     ratio: Math.max(ratioAccentSurface, ratioAccentPrimary).toFixed(2),
-    threshold: '2.00:1',
+    threshold: '3.00:1',
     detail: passAccent
       ? `Accent (${accent}) provides vibrant differentiation against layout elements.`
       : `Accent tone lacks sufficient chromatic separation against primary and surface colors.`
@@ -184,36 +186,71 @@ export function auditBrandConsistency(brand) {
   // 3. Logo Safety Zone & Clear Space (25% weight)
   let logoPoints = 0;
   const totalLogoPoints = 3;
-
+  const assets = Array.isArray(brand.assets) ? brand.assets : [];
+  const logoByType = new Map(assets.map((asset) => [asset.type, asset]));
+  if (![...logoByType.keys()].some((type) => type.startsWith('logo_'))) {
+    const rendered = buildBrandLogos(brand);
+    for (const [type, svg] of Object.entries({
+      logo_primary: rendered.primary,
+      logo_stacked: rendered.stacked,
+      logo_mark: rendered.mark,
+      logo_mono_light: rendered.monoLight,
+      logo_mono_dark: rendered.monoDark
+    })) logoByType.set(type, { type, svgOrConfig: { svg, specs: rendered.specs } });
+  }
+  const svgFor = (type) => String(logoByType.get(type)?.svgOrConfig?.svg || '');
+  const validSvg = (svg) => /^\s*<svg\b/i.test(svg) && /<\/svg>\s*$/i.test(svg) && /\bviewBox\s*=\s*["'][^"']+["']/i.test(svg);
+  const clearSpaceSpec = (type) => String(logoByType.get(type)?.svgOrConfig?.specs?.clearSpaceRule || '');
+  const primarySvg = svgFor('logo_primary');
+  const passClearSpace = ['logo_primary', 'logo_stacked'].every((type) => validSvg(svgFor(type)) && /1x mark width/i.test(clearSpaceSpec(type)));
+  if (passClearSpace) logoPoints += 1;
   checks.push({
     id: 'logo-clear-space',
     rule: 'Clear Space Safety Zone',
     category: 'logo',
     weight: 10,
-    passed: true,
-    detail: '1x mark width perimeter protection enforced across all SVG lockup renders.'
+    passed: passClearSpace,
+    detail: passClearSpace
+      ? 'Primary and stacked SVGs are present and each declares the 1x mark-width clear-space rule.'
+      : 'Could not verify the clear-space specification for both primary and stacked logo SVGs.'
   });
-  logoPoints += 1;
 
+  const minDigitalSpec = String(logoByType.get('logo_primary')?.svgOrConfig?.specs?.minDigitalSize || '');
+  const hasDimensions = /\bwidth\s*=\s*["']\d+/i.test(primarySvg) && /\bheight\s*=\s*["']\d+/i.test(primarySvg);
+  const passMinDigital = validSvg(primarySvg) && hasDimensions && /24\s*px/i.test(minDigitalSpec);
+  if (passMinDigital) logoPoints += 1;
   checks.push({
     id: 'logo-min-size',
     rule: 'Minimum Display & Print Scale',
     category: 'logo',
     weight: 8,
-    passed: true,
-    detail: 'Minimum digital rendering size locked at 24px height; print scale calibrated at 15mm.'
+    passed: passMinDigital,
+    detail: passMinDigital
+      ? `Primary logo SVG has explicit dimensions and declares a ${minDigitalSpec} minimum.`
+      : 'The primary logo SVG is missing explicit dimensions or a 24px minimum-size specification.'
   });
-  logoPoints += 1;
 
+  const lightSvg = svgFor('logo_mono_light');
+  const darkSvg = svgFor('logo_mono_dark');
+  const hasFill = (svg, color) => new RegExp(`fill\\s*(?:=|:)\\s*["']?${color}`, 'i').test(svg);
+  const lightRatio = calculateContrastRatio('#0A0A0A', '#FFFFFF');
+  const darkRatio = calculateContrastRatio('#FFFFFF', '#0A0A0A');
+  const passServerMono = hasFill(lightSvg, '#FFFFFF') && hasFill(lightSvg, '#0A0A0A') &&
+    hasFill(darkSvg, '#0A0A0A') && hasFill(darkSvg, '#FFFFFF');
+  const passClientMono = hasFill(lightSvg, '#171516') && hasFill(lightSvg, '#555152') &&
+    hasFill(darkSvg, '#FFFFFF') && hasFill(darkSvg, '#D5CED0');
+  const passMono = validSvg(lightSvg) && validSvg(darkSvg) && (passServerMono || passClientMono) && lightRatio >= 7 && darkRatio >= 7;
+  if (passMono) logoPoints += 1;
   checks.push({
     id: 'logo-mono-reversibility',
     rule: 'Monochrome AAA Reversibility',
     category: 'logo',
     weight: 7,
-    passed: true,
-    detail: 'Monochrome light (#0A0A0A on #FFFFFF) and dark (#FFFFFF on #0A0A0A) achieve 19.8:1 contrast.'
+    passed: passMono,
+    detail: passMono
+      ? `Both monochrome SVGs are present. Light contrast is ${lightRatio.toFixed(1)}:1 and dark contrast is ${darkRatio.toFixed(1)}:1 (AAA).`
+      : 'Both light and dark monochrome SVGs with high-contrast foreground and background colors are required.'
   });
-  logoPoints += 1;
 
   const logoScore = Math.round((logoPoints / totalLogoPoints) * 100);
 
@@ -237,4 +274,3 @@ export function auditBrandConsistency(brand) {
     }
   };
 }
-

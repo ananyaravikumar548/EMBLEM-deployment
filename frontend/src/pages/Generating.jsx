@@ -1,29 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Check, Circle, Sparkles } from 'lucide-react';
 import { useBrand } from '../context/BrandContext';
 
 const STEPS = [
-  'Finding the brand’s point of view',
-  'Shaping the color and type system',
-  'Drawing the logo family',
-  'Applying the identity to real touchpoints',
-  'Preparing your brand guide'
+  'Saving your brand brief',
+  'Generating your identity and assets',
+  'Your identity is ready'
 ];
 
 export const Generating = ({ onComplete }) => {
-  const { brand, isGenerating } = useBrand();
+  const { brand, isGenerating, generationStage } = useBrand();
   const companyName = brand?.companyName || brand?.company_name || 'your brand';
-  const [currentStep, setCurrentStep] = useState(0);
+  const currentStep = Math.max(0, Math.min(generationStage ?? 0, STEPS.length - 1));
 
   useEffect(() => {
-    const stepInterval = setInterval(() => {
-      setCurrentStep((previous) => Math.min(previous + 1, STEPS.length - 1));
-    }, 1100);
-    return () => clearInterval(stepInterval);
-  }, []);
-
-  useEffect(() => {
-    if (!isGenerating && currentStep >= 2) {
+    if (!isGenerating && currentStep >= STEPS.length - 1) {
       const finishTimer = setTimeout(() => onComplete?.(), 700);
       return () => clearTimeout(finishTimer);
     }
@@ -62,7 +53,7 @@ export const Generating = ({ onComplete }) => {
                 );
               })}
             </div>
-            <p className="mt-5 text-[11px] text-[#a08f91]">This can take a few moments. Keep this window open.</p>
+            <p className="mt-5 text-[11px] text-[#a08f91]">Your brief is saved first. The identity, logos, and brand assets are generated together.</p>
           </div>
 
           <div className="relative mx-auto w-full max-w-[540px]">

@@ -3,6 +3,9 @@ import { auditBrandConsistency } from '../lib/consistencyAuditor';
 import { exportBrandKitZip } from '../lib/exportEngine';
 
 const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'production' ? '/api/v1' : 'http://localhost:5001/api/v1');
+const rememberSelectedBrand = (brandId) => {
+  try { sessionStorage.setItem('emblem-selected-brand-id', String(brandId)); } catch (error) { /* Session storage is an optional convenience. */ }
+};
 
 const BrandContext = createContext();
 
@@ -55,7 +58,7 @@ export const DEFAULT_BRAND = {
       svgOrConfig: {
         dimensions: '3.5in x 2.0in (1050x600)',
         front: { background: '#0F172A', logoVariant: 'logo_mark', accentBar: '#738F80' },
-        back: { background: '#F8FAFC', textColor: '#0F172A', accentColor: '#738F80', fontDisplay: 'Syne', fontBody: 'Inter', name: 'Alex Vance', title: 'Founding Partner & CEO', email: 'contact@nova.energy', phone: '+1 (555) 249-8012', website: 'www.nova.energy' }
+        back: { background: '#F8FAFC', textColor: '#0F172A', accentColor: '#738F80', fontDisplay: 'Syne', fontBody: 'Inter', name: 'Your name', title: 'Your role', email: 'name@yourdomain.com', phone: 'Your phone number', website: 'yourdomain.com' }
       },
       consistencyScore: 96
     },
@@ -141,6 +144,7 @@ export const BrandProvider = ({ children }) => {
   const [userBrands, setUserBrands] = useState([]);
   const [user, setUser] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationStage, setGenerationStage] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
   const [isApplyingDirection, setIsApplyingDirection] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
@@ -218,22 +222,7 @@ export const BrandProvider = ({ children }) => {
   // Initialize session on mount
   useEffect(() => {
     const init = async () => {
-      const currentUser = await checkAuth();
-      if (!currentUser && process.env.NODE_ENV !== 'production') {
-        try {
-          const demoRes = await fetch(`${API_BASE}/auth/demo`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' }
-          });
-          if (demoRes.ok) {
-            const demoData = await demoRes.json();
-            setUser(demoData.user);
-          }
-        } catch (e) {
-          console.warn('Backend offline, running in client-only demo mode.');
-        }
-      }
+      await checkAuth();
       fetchUserBrands();
     };
     init();
@@ -275,6 +264,23 @@ export const BrandProvider = ({ children }) => {
     return data.user;
   };
 
+  // Explicitly enter the shared demo account instead of silently signing in on startup.
+  const demoLogin = async () => {
+    const res = await fetch(`${API_BASE}/auth/demo`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Demo access is unavailable.');
+    }
+    const data = await res.json();
+    setUser(data.user);
+    await fetchUserBrands();
+    return data.user;
+  };
+
   // Logout handler
   const logout = async () => {
     try {
@@ -292,12 +298,14 @@ export const BrandProvider = ({ children }) => {
   // Create & Generate Brand Pipeline
   const createBrand = async (formData) => {
     setIsGenerating(true);
+    setGenerationStage(0);
     const previousBrand = brand;
 
     const name = formData.company_name || formData.companyName || 'AURA';
     const vision = formData.vision || formData.description || 'Next-generation intelligent products.';
     const industry = formData.industry || 'Technology';
-    const personality = formData.personality?.length ? formData.personality : DEFAULT_BRAND.personality;
+    const personality = Array.isArray(formData.personality) ? formData.personality : [];
+    const personalityPreferences = formData.personality?.length ? formData.personality : ['Minimal'];
     const targetAudience = formData.targetAudience || 'Modern Consumers';
     let createdBrandId = null;
 
@@ -323,7 +331,8 @@ export const BrandProvider = ({ children }) => {
           companyName: name,
           description: vision,
           industry,
-          targetAudience
+          targetAudience,
+          personalityPreferences
         })
       });
       const createData = await createRes.json().catch(() => ({}));
@@ -334,6 +343,7 @@ export const BrandProvider = ({ children }) => {
       createdBrandId = createData.brand?._id;
       if (!createdBrandId) throw new Error('The server created no brand record. Check the backend response.');
 
+      setGenerationStage(1);
       const genRes = await fetch(`${API_BASE}/brand/${createdBrandId}/generate`, {
         method: 'POST',
         credentials: 'include',
@@ -356,12 +366,25 @@ export const BrandProvider = ({ children }) => {
         id: genData.brand._id,
         companyName: genData.brand.companyName || name,
         company_name: genData.brand.companyName || name,
+        // Keep demo copy from DEFAULT_BRAND out of generated identities when the
+        // generator omits a field; Brand DNA can then show a clear missing state.
+        tagline: genData.dna.tagline || genData.brand.tagline || '',
         targetAudience: genData.dna.targetAudience || targetAudience,
-        personality,
+        personality: genData.dna.personality || personality,
+        keywords: Array.isArray(genData.dna.keywords) ? genData.dna.keywords : [],
+        coreValues: Array.isArray(genData.dna.coreValues) ? genData.dna.coreValues : [],
+        voiceTone: Array.isArray(genData.dna.voiceTone) ? genData.dna.voiceTone : [],
+        coreMantra: genData.dna.coreMantra || '',
+        visualDirection: genData.dna.visualDirection || '',
+        visual_style_description: genData.dna.visual_style_description || '',
+        rationale: genData.dna.rationale || {},
+        personalityPreferences,
         assets: genData.assets || [],
         consistency: genData.consistency
       };
       setBrand(mergedBrand);
+      setGenerationStage(2);
+      if (genData.brand._id) rememberSelectedBrand(genData.brand._id);
       fetchUserBrands();
       return mergedBrand;
     } catch (err) {
@@ -403,6 +426,7 @@ export const BrandProvider = ({ children }) => {
           consistency: data.consistency
         };
         setBrand(merged);
+        rememberSelectedBrand(brandId);
       }
     } catch (e) {
       console.warn('Failed to switch brand:', e);
@@ -428,6 +452,45 @@ export const BrandProvider = ({ children }) => {
       ...prev,
       ...updatedFields
     }));
+  };
+
+  const saveBrandProfile = async (fields) => {
+    const brandId = brand?.brandId || brand?.id || brand?._id;
+    if (!brandId || !/^[\da-f]{24}$/i.test(String(brandId))) {
+      setBrand((previous) => ({ ...previous, ...fields }));
+      return { ...brand, ...fields };
+    }
+
+    const response = await fetch(`${API_BASE}/brand/${brandId}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fields)
+    });
+    const responseText = await response.text();
+    let data = {};
+    try { data = responseText ? JSON.parse(responseText) : {}; } catch (error) { data = {}; }
+    if (!response.ok) throw new Error(data.error || `Could not save brand changes (HTTP ${response.status}).`);
+
+    setBrand((previous) => {
+      const canonicalBrandId = previous.brandId || previous.id || previous._id;
+      const savedColors = data.dna?.colors || fields.colors || previous.colors || {};
+      return {
+        ...previous,
+        ...fields,
+        ...data.brand,
+        ...data.dna,
+        _id: canonicalBrandId,
+        id: canonicalBrandId,
+        companyName: data.brand?.companyName || fields.companyName || previous.companyName,
+        company_name: data.brand?.companyName || fields.companyName || previous.company_name,
+        colors: { ...savedColors, background: savedColors.surface, text: savedColors.primary },
+        assets: data.assets || previous.assets,
+        consistency: data.consistency || previous.consistency
+      };
+    });
+    fetchUserBrands();
+    return data;
   };
 
   const applyBrandDirection = async (direction) => {
@@ -489,35 +552,12 @@ export const BrandProvider = ({ children }) => {
         background: palette.colors.surface,
         text: palette.colors.primary
       };
-      const brandId = brand?.brandId || brand?.id || brand?._id;
-      if (brandId && /^[\da-f]{24}$/i.test(String(brandId))) {
-        const response = await fetch(`${API_BASE}/brand/${brandId}/palette`, {
-          method: 'PATCH',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paletteId: palette.id })
-        });
-        const responseText = await response.text();
-        let data = {};
-        try { data = responseText ? JSON.parse(responseText) : {}; } catch (error) { data = {}; }
-        if (!response.ok) throw new Error(data.error || `Could not save this palette (HTTP ${response.status}).`);
-        setBrand((previous) => {
-          const canonicalBrandId = previous.brandId || previous.id || previous._id;
-          return {
-            ...previous,
-            ...data.dna,
-            _id: canonicalBrandId,
-            id: canonicalBrandId,
-            assets: data.assets || previous.assets,
-            consistency: data.consistency || previous.consistency
-          };
-        });
-        return data.dna;
-      }
-
-      const fields = { colors, paletteId: palette.id };
-      setBrand((previous) => ({ ...previous, ...fields }));
-      return fields;
+      return await saveBrandProfile({
+        companyName: brand?.companyName || brand?.company_name || 'EMBLEM',
+        tagline: brand?.tagline || '',
+        colors,
+        paletteId: palette.id
+      });
     } finally {
       setIsApplyingDirection(false);
     }
@@ -535,16 +575,19 @@ export const BrandProvider = ({ children }) => {
         authLoading,
         login,
         register,
+        demoLogin,
         logout,
         checkAuth,
         selectBrand,
         createBrand,
         updateBrandTokens,
+        saveBrandProfile,
         applyBrandDirection,
         applyBrandPalette,
         isApplyingDirection,
         loadDemo,
         isGenerating,
+        generationStage,
         isExporting,
         exportKit,
         complianceScore: {

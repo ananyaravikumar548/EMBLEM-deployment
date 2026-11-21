@@ -480,3 +480,4 @@ MIT © 2026 [ananyaravikumar548](https://github.com/ananyaravikumar548)
 <div align="center">
   <sub>Built with React · Express · MongoDB · Gemini · Tailwind CSS</sub>
 </div>
+

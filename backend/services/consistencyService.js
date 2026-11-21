@@ -97,7 +97,7 @@ function auditBrandConsistency(brandDNA, assets = []) {
   // Check 1.3: Accent Distinction & Vibrancy
   const ratioAccentSurface = calculateContrastRatio(colors.accent, colors.surface);
   const ratioAccentPrimary = calculateContrastRatio(colors.accent, colors.primary);
-  const passAccent = ratioAccentSurface >= 2.0 || ratioAccentPrimary >= 2.0;
+  const passAccent = ratioAccentSurface >= 3.0 || ratioAccentPrimary >= 3.0;
   if (passAccent) colorPoints += 1;
   checks.push({
     rule: 'Accent Distinction & Vibrancy',
@@ -173,39 +173,63 @@ function auditBrandConsistency(brandDNA, assets = []) {
   // ----------------------------------------------------
   let logoPoints = 0;
   const totalLogoPoints = 3;
-
-  // Check 3.1: Clear Space 1x Rule
-  const passClearSpace = true; // Handled deterministically by vectorLogoService padding
+  const logoByType = new Map((Array.isArray(assets) ? assets : []).map((asset) => [asset.type, asset]));
+  const svgFor = (type) => String(logoByType.get(type)?.svgOrConfig?.svg || '');
+  const validSvg = (svg) => /^\s*<svg\b/i.test(svg) && /<\/svg>\s*$/i.test(svg) && /\bviewBox\s*=\s*["'][^"']+["']/i.test(svg);
+  const primarySvg = svgFor('logo_primary');
+  const stackedSvg = svgFor('logo_stacked');
+  const clearSpaceSpec = (type) => String(logoByType.get(type)?.svgOrConfig?.specs?.clearSpaceRule || '');
+  const passClearSpace = ['logo_primary', 'logo_stacked'].every((type) => (
+    validSvg(svgFor(type)) && /1x mark width/i.test(clearSpaceSpec(type))
+  ));
   if (passClearSpace) logoPoints += 1;
   checks.push({
     rule: 'Logo Clear Space Boundary',
     category: 'logo',
-    passed: true,
-    score: 100,
-    detail: 'Clear space zone of 1x mark width (minimum 48px digital padding) enforced on all lockup variants.'
+    passed: passClearSpace,
+    score: passClearSpace ? 100 : 0,
+    detail: passClearSpace
+      ? 'Primary and stacked SVGs are present and each declares the 1x mark-width clear-space rule.'
+      : 'Could not verify the clear-space specification for both primary and stacked logo SVGs.',
+    assetType: 'logo_primary, logo_stacked'
   });
 
-  // Check 3.2: Minimum Digital Size Constraint
-  const passMinDigital = true;
+  // Check 3.2: Verify the generated logo assets publish a minimum-size specification.
+  const minDigitalSpec = String(logoByType.get('logo_primary')?.svgOrConfig?.specs?.minDigitalSize || '');
+  const hasDimensions = /\bwidth\s*=\s*["']\d+/i.test(primarySvg) && /\bheight\s*=\s*["']\d+/i.test(primarySvg);
+  const passMinDigital = validSvg(primarySvg) && hasDimensions && /24\s*px/i.test(minDigitalSpec);
   if (passMinDigital) logoPoints += 1;
   checks.push({
     rule: 'Minimum Digital Size Threshold',
     category: 'logo',
-    passed: true,
-    score: 100,
-    detail: 'Vectors calibrated with minimum 24px digital display threshold to prevent stroke degradation.'
+    passed: passMinDigital,
+    score: passMinDigital ? 100 : 0,
+    detail: passMinDigital
+      ? `Primary logo SVG is valid, has explicit dimensions, and declares a ${minDigitalSpec} minimum.`
+      : 'The primary logo SVG is missing explicit dimensions or a 24px minimum-size specification.',
+    assetType: 'logo_primary'
   });
 
-  // Check 3.3: Monochrome Reversibility
-  // Verify high contrast for both light and dark mono lockups
-  const passMono = true;
+  // Check 3.3: Verify both monochrome variants and their foreground/background contrast.
+  const lightSvg = svgFor('logo_mono_light');
+  const darkSvg = svgFor('logo_mono_dark');
+  const hasFill = (svg, color) => new RegExp(`fill\\s*(?:=|:)\\s*["']?${color}`, 'i').test(svg);
+  const lightRatio = calculateContrastRatio('#0A0A0A', '#FFFFFF');
+  const darkRatio = calculateContrastRatio('#FFFFFF', '#0A0A0A');
+  const passMono = validSvg(lightSvg) && validSvg(darkSvg) &&
+    hasFill(lightSvg, '#FFFFFF') && hasFill(lightSvg, '#0A0A0A') &&
+    hasFill(darkSvg, '#0A0A0A') && hasFill(darkSvg, '#FFFFFF') &&
+    lightRatio >= 7 && darkRatio >= 7;
   if (passMono) logoPoints += 1;
   checks.push({
     rule: 'Monochrome High-Contrast Adaptability',
     category: 'logo',
-    passed: true,
-    score: 100,
-    detail: 'Mono Light (#0A0A0A on #FFFFFF = 19.8:1) and Mono Dark (#FFFFFF on #0A0A0A = 19.8:1) satisfy AAA contrast requirements.'
+    passed: passMono,
+    score: passMono ? 100 : 0,
+    detail: passMono
+      ? `Both monochrome SVGs are present. Light contrast is ${lightRatio.toFixed(1)}:1 and dark contrast is ${darkRatio.toFixed(1)}:1 (AAA).`
+      : 'Both light and dark monochrome SVGs with high-contrast foreground and background colors are required.',
+    assetType: 'logo_mono_light, logo_mono_dark'
   });
 
   const logoScore = Math.round((logoPoints / totalLogoPoints) * 100);

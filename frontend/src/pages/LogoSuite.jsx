@@ -32,7 +32,20 @@ export const LogoSuite = () => {
   const previewWidth = Math.min(600, Math.max(250, logos.lockupWidth * 1.12));
   const colorwayWidth = Math.min(460, Math.max(220, logos.lockupWidth * 1.05));
   const markOptions = getMarkOptions(brand?.logoStyleToken || 'minimal');
+  const selectedMarkOption = markOptions.find((option) => (brand?.logoMarkId && brand.logoMarkId === option.id) || (!brand?.logoMarkId && logos.markPath === option.svg)) || markOptions[0];
+  const isMarkActive = (option) => option.id === selectedMarkOption?.id;
+  const visibleMarkOptions = selectedMarkOption
+    ? [selectedMarkOption, ...markOptions.filter((option) => option.id !== selectedMarkOption.id).slice(0, 2)]
+    : [];
   const selected = LOGO_FORMATS.find((item) => item.id === selectedId) || LOGO_FORMATS[0];
+  const anatomyParts = selected.id === 'mark'
+    ? [['01', 'Symbol']]
+    : [['01', 'Symbol'], ['02', 'Wordmark'], ['03', 'Tagline']];
+  const anatomyWidth = selected.id === 'mark'
+    ? 104
+    : selected.id === 'stacked'
+      ? 190
+      : Math.min(330, Math.max(190, logos.lockupWidth * 0.82));
 
   const handleDownload = (id, slug) => {
     const safeName = companyName.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'brand';
@@ -91,17 +104,17 @@ export const LogoSuite = () => {
         <div className="px-5 py-4 sm:px-6">
           <p className="text-[10px] font-semibold uppercase tracking-[.16em] text-[#a58d91]">02 / Logo anatomy</p>
           <h2 id="logo-anatomy-heading" className="mt-1 text-lg font-semibold tracking-[-.025em] text-[#332629]">Built in considered parts.</h2>
-          <p className="mt-1 text-xs leading-5 text-[#857679]">The primary lockup, mapped on a simple construction grid.</p>
+          <p className="mt-1 text-xs leading-5 text-[#857679]">The selected {selected.detail.toLowerCase()}, mapped on a simple construction grid.</p>
         </div>
         <div className="relative mx-4 flex min-h-[190px] items-center justify-center overflow-hidden bg-[#faf7f4] px-5 py-8 sm:mx-5 sm:min-h-[220px]" style={{ backgroundImage: 'linear-gradient(rgba(141,67,86,.055) 1px, transparent 1px), linear-gradient(90deg, rgba(141,67,86,.055) 1px, transparent 1px)', backgroundSize: '22px 22px' }}>
           <div className="pointer-events-none absolute inset-4 border border-dashed border-[#c9aab1]" />
           <span className="absolute left-5 top-3 bg-[#faf7f4] px-2 text-[8px] font-semibold uppercase tracking-[.12em] text-[#a2707d]">1× safe area</span>
           <span className="absolute right-5 top-3 font-mono text-[8px] uppercase tracking-wider text-[#b29da1]">Grid / 8 pt</span>
-          <LogoPreview svg={logos.primary} style={{ maxWidth: Math.min(330, Math.max(190, logos.lockupWidth * 0.82)) }} className="relative z-10 w-full" />
-          <span className="absolute bottom-2 right-3 font-mono text-[8px] text-[#a18e92]">LOCKUP / 01</span>
+          <LogoPreview svg={logos[selected.id]} style={{ maxWidth: anatomyWidth }} className="relative z-10 w-full" />
+          <span className="absolute bottom-2 right-3 font-mono text-[8px] text-[#a18e92]">{selected.detail.toUpperCase()} / {String(LOGO_FORMATS.findIndex((format) => format.id === selected.id) + 1).padStart(2, '0')}</span>
         </div>
         <div className="flex items-center justify-around gap-2 px-4 py-3 sm:px-5">
-          {[['01', 'Symbol'], ['02', 'Wordmark'], ['03', 'Tagline']].map(([number, label], index) => <React.Fragment key={number}><div className="min-w-0"><span className="font-mono text-[8px] font-semibold text-[#a2707d]">{number}</span><p className="mt-0.5 truncate text-[10px] font-semibold text-[#49383c] sm:text-xs">{label}</p></div>{index < 2 && <span className="h-px flex-1 bg-[#eadfdb]" />}</React.Fragment>)}
+          {anatomyParts.map(([number, label], index) => <React.Fragment key={number}><div className="min-w-0"><span className="font-mono text-[8px] font-semibold text-[#a2707d]">{number}</span><p className="mt-0.5 truncate text-[10px] font-semibold text-[#49383c] sm:text-xs">{label}</p></div>{index < anatomyParts.length - 1 && <span className="h-px flex-1 bg-[#eadfdb]" />}</React.Fragment>)}
         </div>
       </div>
 
@@ -157,16 +170,16 @@ export const LogoSuite = () => {
       <section aria-labelledby="mark-options-heading" className="space-y-3">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[.16em] text-[#a58d91]">05 / Fine-tune the symbol</p>
-          <h2 id="mark-options-heading" className="mt-1 text-xl font-semibold tracking-[-.03em] text-[#332629]">Explore mark concepts</h2>
-          <p className="mt-1 text-sm text-[#786b6d]">Choose another symbol from the same visual direction. Your logo formats update with it.</p>
+          <h2 id="mark-options-heading" className="mt-1 text-xl font-semibold tracking-[-.03em] text-[#332629]">Your symbol, with two alternatives</h2>
+          <p className="mt-1 text-sm text-[#786b6d]">Compare your selected mark with two considered options from the same visual direction.</p>
         </div>
         {markError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">{markError}</p>}
         <div className="grid divide-y divide-[#eadfdb] border-y border-[#eadfdb] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-          {markOptions.map((option, index) => {
-            const active = (brand?.logoMarkId && brand.logoMarkId === option.id) || (!brand?.logoMarkId && logos.markPath === option.svg);
+          {visibleMarkOptions.map((option, index) => {
+            const active = isMarkActive(option);
             return <button key={option.id} type="button" onClick={() => chooseMark(option.id)} disabled={isApplyingDirection} aria-pressed={active} className={`group flex items-center gap-3 px-3 py-3 text-left transition sm:px-4 ${active ? 'bg-[#fbf5f5]' : 'hover:bg-[#fcfaf9]'}`}>
               <span className="flex h-12 w-12 shrink-0 items-center justify-center"><svg aria-hidden="true" viewBox="0 0 48 48" className="h-10 w-10" style={{ color: primaryColor }}><g>{option.svg}</g></svg></span>
-              <span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="text-xs font-semibold text-[#392d30]">Concept {String(index + 1).padStart(2, '0')}</span>{active && <Check size={14} className="text-[#8d4356]" />}</span><span className="mt-1 block truncate text-[10px] text-[#857679]">{option.id.replace(/_/g, ' ')}</span><span className="mt-1 block text-[8px] font-semibold uppercase tracking-wider text-[#a18e92]">{active ? 'Selected' : isApplyingDirection ? 'Saving…' : 'Select symbol'}</span></span>
+              <span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="text-xs font-semibold text-[#392d30]">{active ? 'Selected symbol' : `Alternative ${index}`}</span>{active && <Check size={14} className="text-[#8d4356]" />}</span><span className="mt-1 block truncate text-[10px] capitalize text-[#857679]">{option.id.replace(/_/g, ' ')}</span><span className="mt-1 block text-[8px] font-semibold uppercase tracking-wider text-[#a18e92]">{active ? 'Current mark' : isApplyingDirection ? 'Saving…' : 'Choose symbol'}</span></span>
             </button>;
           })}
         </div>

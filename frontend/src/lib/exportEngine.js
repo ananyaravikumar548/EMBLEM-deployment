@@ -90,18 +90,19 @@ Date: ${new Date().toISOString()}
 
   // 3a. /digital/ folder: ready-to-use email signature and presentation cover
   const digitalFolder = zip.folder('digital');
-  const signatureEmail = `hello@${companyName.replace(/-/g, '')}.com`;
-  const signatureWebsite = `www.${companyName.replace(/-/g, '')}.com`;
+  const signatureEmail = 'name@yourdomain.com';
+  const signatureWebsite = 'yourdomain.com';
   const htmlEscape = (value = '') => String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
   const signatureHtml = `<!doctype html>
 <html><body>
 <table role="presentation" cellpadding="0" cellspacing="0" style="font-family:Arial,sans-serif;color:${primaryInk};border-left:4px solid ${accent};">
   <tr>
     <td style="padding:12px 18px;">
-      <strong style="font-size:16px;">Alex Morgan</strong><br>
-      <span style="font-size:12px;color:${secondaryInk};">Brand &amp; Communications</span><br>
+      <strong style="font-size:16px;">Your name</strong><br>
+      <span style="font-size:12px;color:${secondaryInk};">Your title</span><br>
       <a href="mailto:${signatureEmail}" style="font-size:12px;color:${primaryInk};text-decoration:none;">${signatureEmail}</a><br>
-      <a href="https://${signatureWebsite}" style="font-size:12px;color:${accentInk};text-decoration:none;">${signatureWebsite}</a>
+      <a href="https://${signatureWebsite}" style="font-size:12px;color:${accentInk};text-decoration:none;">${signatureWebsite}</a><br>
+      <span style="font-size:10px;color:#817679;">Replace with your contact details</span>
     </td>
     <td style="padding:12px 18px;border-left:1px solid #e8e2df;">
       <strong style="font-size:12px;letter-spacing:1px;">${htmlEscape(brand?.companyName || brand?.company_name || 'Your brand')}</strong><br>
@@ -129,7 +130,37 @@ Date: ${new Date().toISOString()}
   <text x="1760" y="980" text-anchor="end" font-family="Arial,sans-serif" font-size="18" font-weight="700" letter-spacing="2" fill="${primaryInk}">01 / 12</text>
 </svg>`;
   digitalFolder.file('presentation-cover.svg', presentationCover);
-  digitalFolder.file('README.txt', 'Email signature: open email-signature.html and copy the table into your email client signature settings.\nPresentation cover: import presentation-cover.svg into your slide editor, then duplicate the slide and replace the copy. The file uses editable vector shapes and text.\n');
+  const rawPrinciples = Array.isArray(brand?.coreValues) && brand.coreValues.length
+    ? brand.coreValues
+    : (Array.isArray(brand?.personality) ? brand.personality : []);
+  const principles = (rawPrinciples.length ? rawPrinciples : ['Purpose', 'Craft', 'Progress']).slice(0, 3)
+    .map((value) => typeof value === 'string'
+      ? { title: value, description: '' }
+      : { title: value?.title || value?.name || 'Principle', description: value?.description || value?.desc || '' });
+  const principleRows = principles.map((principle, index) => {
+    const y = 420 + index * 172;
+    return `<text x="900" y="${y}" font-family="Arial,sans-serif" font-size="22" font-weight="700" letter-spacing="3" fill="${accentInk}">0${index + 1}</text>
+  <text x="970" y="${y}" font-family="Arial,sans-serif" font-size="34" font-weight="700" fill="${primaryInk}">${htmlEscape(principle.title)}</text>
+  ${principle.description ? `<text x="970" y="${y + 48}" font-family="Arial,sans-serif" font-size="20" fill="${secondaryInk}">${htmlEscape(principle.description)}</text>` : ''}
+  <line x1="970" y1="${y + 82}" x2="1740" y2="${y + 82}" stroke="${accent}" stroke-opacity=".35" stroke-width="2"/>`;
+  }).join('\n  ');
+  const mission = htmlEscape(brand?.missionStatement || brand?.mission_statement || brand?.visual_style_description || brandTagline);
+  const presentationPrinciples = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <rect width="1920" height="1080" fill="${surface}"/>
+  <rect x="0" y="0" width="700" height="1080" fill="${primary}"/>
+  <circle cx="110" cy="960" r="390" fill="${accent}" opacity=".12"/>
+  <svg x="110" y="105" width="82" height="82" viewBox="0 0 48 48"><g color="${surfaceOnAccent}">${logos.markPath}</g></svg>
+  <text x="110" y="300" font-family="Arial,sans-serif" font-size="20" font-weight="700" letter-spacing="4" fill="${surfaceOnAccent}">02 / BRAND FOUNDATIONS</text>
+  <text x="110" y="410" font-family="Arial,sans-serif" font-size="58" font-weight="700" fill="${surfaceInk}">Principles</text>
+  <text x="110" y="478" font-family="Arial,sans-serif" font-size="58" font-weight="700" fill="${surfaceInk}">with purpose.</text>
+  <text x="110" y="575" font-family="Arial,sans-serif" font-size="23" fill="${surfaceInk}">${mission}</text>
+  <text x="110" y="970" font-family="Arial,sans-serif" font-size="18" font-weight="700" letter-spacing="3" fill="${surfaceOnAccent}">${brandName}</text>
+  <text x="900" y="230" font-family="Arial,sans-serif" font-size="20" font-weight="700" letter-spacing="4" fill="${secondaryInk}">WHAT GUIDES THE BRAND</text>
+  ${principleRows}
+  <text x="1760" y="1000" text-anchor="end" font-family="Arial,sans-serif" font-size="18" font-weight="700" letter-spacing="2" fill="${secondaryInk}">02 / 12</text>
+</svg>`;
+  digitalFolder.file('presentation-principles.svg', presentationPrinciples);
+  digitalFolder.file('README.txt', 'Email signature: open email-signature.html and copy the table into your email client signature settings.\nPresentation: import presentation-cover.svg and presentation-principles.svg as the first two slides. Both files use editable vector shapes and text.\n');
 
   // 4. /tokens/ folder
   const tokenFolder = zip.folder('tokens');

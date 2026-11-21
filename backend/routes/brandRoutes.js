@@ -9,6 +9,7 @@ router.use(authMiddleware);
 router.get('/', brandController.getUserBrands);
 router.post('/', brandController.createBrand);
 router.get('/:id', brandController.getBrandById);
+router.patch('/:id', brandController.updateBrandProfile);
 router.patch('/:id/direction', brandController.updateBrandDirection);
 router.patch('/:id/palette', brandController.updateBrandPalette);
 router.post('/:id/generate', brandController.generateBrandAssets);

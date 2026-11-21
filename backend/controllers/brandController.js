@@ -82,7 +82,7 @@ const getActiveGroqModel = async () => {
 /**
  * Service function to synthesize elite-grade Brand DNA using Groq LLM
  */
-const generateBrandDNAFromGroq = async ({ companyName, description, industry, targetAudience, brandId }) => {
+const generateBrandDNAFromGroq = async ({ companyName, description, industry, targetAudience, personalityPreferences = [], brandId }) => {
   const selectedModel = await getActiveGroqModel();
   console.log(`[GeneratePipeline] Using resolved Groq model: ${selectedModel}`);
 
@@ -95,6 +95,7 @@ Brand Requirements:
 - Industry: "${industry || 'Technology'}"
 - Product Description: "${description}"
 - Target Audience: "${targetAudience || 'Modern discerning professionals'}"
+- User-selected personality traits: ${personalityPreferences.length ? personalityPreferences.join(', ') : 'No fixed traits; infer them from the brief'}
 
 CRITICAL DESIGN LAWS YOU MUST FOLLOW:
 1. COLOR PALETTE:
@@ -108,6 +109,7 @@ CRITICAL DESIGN LAWS YOU MUST FOLLOW:
 2. TYPOGRAPHY:
    - Give each visual direction its own appropriate display/body font pairing. Use real Google Fonts and vary the pairings across the five proposals; do not repeat one pair five times.
    - Choose type based on the brand's category and audience rather than a fixed list of archetypes.
+   - When user-selected personality traits are provided, include them in the returned personality and reflect them in the visual directions.
 
 3. VERBAL & POSITIONING:
    - BANNED BUZZWORDS: Avoid empty corporate filler like "innovative", "empower", "seamless", "cutting-edge", or "next-generation".
@@ -194,6 +196,13 @@ Return STRICTLY a JSON object matching this exact schema. The designDirections a
 
   const cleanJson = responseContent.replace(/```json\n?|\n?```/g, '').trim();
   const result = JSON.parse(cleanJson);
+  const selectedTraits = Array.isArray(personalityPreferences)
+    ? personalityPreferences.filter((trait) => typeof trait === 'string' && trait.trim()).map((trait) => trait.trim())
+    : [];
+  if (selectedTraits.length) {
+    const generatedTraits = Array.isArray(result.personality) ? result.personality.filter((trait) => typeof trait === 'string') : [];
+    result.personality = [...new Set([...selectedTraits, ...generatedTraits])].slice(0, 5);
+  }
   if ([result.tagline, result.coreMantra, result.visualDirection, result.visual_style_description].some((copy) => echoesBrief(copy, description, companyName))) {
     try {
       const rewrite = await groq.chat.completions.create({
@@ -249,7 +258,7 @@ exports.getUserBrands = async (req, res) => {
  */
 exports.createBrand = async (req, res) => {
   try {
-    const { companyName, description, industry, targetAudience } = req.body;
+    const { companyName, description, industry, targetAudience, personalityPreferences } = req.body;
     if (!companyName || !description) {
       return res.status(400).json({ error: 'Company name and description are required.' });
     }
@@ -260,6 +269,9 @@ exports.createBrand = async (req, res) => {
       description: description.trim(),
       industry: industry?.trim() || 'General',
       targetAudience: targetAudience?.trim() || 'General Audience',
+      personalityPreferences: Array.isArray(personalityPreferences)
+        ? [...new Set(personalityPreferences.filter((trait) => typeof trait === 'string').map((trait) => trait.trim().slice(0, 40)).filter(Boolean))].slice(0, 3)
+        : [],
       status: 'draft'
     });
 
@@ -319,6 +331,7 @@ exports.generateBrandAssets = async (req, res) => {
       description: brand.description,
       industry: brand.industry,
       targetAudience: brand.targetAudience,
+      personalityPreferences: brand.personalityPreferences || [],
       brandId: String(brand._id)
     });
 
@@ -634,6 +647,62 @@ exports.updateBrandDirection = async (req, res) => {
   } catch (error) {
     console.error('[updateBrandDirection error]:', error);
     return res.status(500).json({ error: 'Failed to apply this brand direction.' });
+  }
+};
+
+/** Persist editable brand profile fields and refresh generated artwork. */
+exports.updateBrandProfile = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { companyName, tagline, colors, paletteId } = req.body || {};
+    if (companyName !== undefined && (typeof companyName !== 'string' || !companyName.trim() || companyName.trim().length > 120)) {
+      return res.status(400).json({ error: 'Brand name must contain 1–120 characters.' });
+    }
+    if (tagline !== undefined && (typeof tagline !== 'string' || !tagline.trim() || tagline.trim().length > 280)) {
+      return res.status(400).json({ error: 'Tagline must contain 1–280 characters.' });
+    }
+    if (colors !== undefined && (!colors || !['primary', 'secondary', 'accent', 'surface'].every((key) => typeof colors[key] === 'string' && /^#[\da-f]{6}$/i.test(colors[key])))) {
+      return res.status(400).json({ error: 'Provide valid six-digit HEX values for all four brand colors.' });
+    }
+    if (companyName === undefined && tagline === undefined && colors === undefined) {
+      return res.status(400).json({ error: 'Provide at least one brand field to update.' });
+    }
+
+    const brand = await Brand.findOne({ _id: id, userId: req.user.id });
+    if (!brand) return res.status(404).json({ error: 'Brand not found or access denied.' });
+    const dna = await BrandDNA.findOne({ brandId: brand._id });
+    if (!dna) return res.status(404).json({ error: 'Brand DNA has not been generated yet.' });
+
+    if (companyName !== undefined) brand.companyName = companyName.trim();
+    if (tagline !== undefined) dna.tagline = tagline.trim();
+    await Promise.all([brand.save(), dna.save()]);
+
+    req.body = {
+      direction: {
+        id: dna.designDirection || `brand-${brand._id}`,
+        name: 'Saved brand profile',
+        colors: colors || dna.colors.toObject?.() || dna.colors,
+        typography: dna.typography.toObject?.() || dna.typography,
+        logoStyleToken: dna.logoStyleToken,
+        logoMarkId: dna.logoMarkId,
+        paletteId: paletteId === undefined ? dna.paletteId : paletteId,
+        rationale: dna.rationale
+      }
+    };
+
+    const responseProxy = {
+      status(statusCode) {
+        res.status(statusCode);
+        return this;
+      },
+      json(payload) {
+        return res.json({ ...payload, brand });
+      }
+    };
+    return await exports.updateBrandDirection(req, responseProxy);
+  } catch (error) {
+    console.error('[updateBrandProfile error]:', error);
+    return res.status(500).json({ error: 'Failed to save this brand profile.' });
   }
 };
 

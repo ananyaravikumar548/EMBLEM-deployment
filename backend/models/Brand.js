@@ -6,6 +6,7 @@ const brandSchema = new mongoose.Schema({
   description: { type: String, required: true },
   industry: { type: String, default: 'General' },
   targetAudience: { type: String, default: 'General Audience' },
+  personalityPreferences: { type: [String], default: [] },
   status: { type: String, enum: ['draft', 'generated', 'archived'], default: 'draft' },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }

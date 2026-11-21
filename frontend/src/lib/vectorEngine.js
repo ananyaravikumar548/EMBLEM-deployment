@@ -134,10 +134,16 @@ export function buildBrandLogos(brand) {
   </svg>`;
   const monoLight = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${lockupWidth} 100" width="${lockupWidth}" height="100">${markAndWordmark('#171516', '#555152')}</svg>`;
   const monoDark = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${lockupWidth} 100" width="${lockupWidth}" height="100">${markAndWordmark('#FFFFFF', '#D5CED0')}</svg>`;
+  const specs = {
+    clearSpaceRule: '1x mark width (48px digital minimum safety perimeter)',
+    minDigitalSize: '24px height',
+    minPrintSize: '15mm height'
+  };
 
   return {
     markPath,
     lockupWidth,
+    specs,
     primary,
     stacked,
     mark,

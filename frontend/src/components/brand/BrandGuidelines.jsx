@@ -153,13 +153,10 @@ export const BrandGuidelines = () => {
 
       <details className="group border-t border-[#eadfdb] pt-5">
         <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
-          <div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f5e9eb] text-[#8f4859]"><ShieldCheck size={17} /></span><div><p className="text-[9px] font-semibold uppercase tracking-[.16em] text-[#a58d91]">Quality assurance</p><h2 className="mt-0.5 text-base font-semibold text-[#332629]">Brand consistency audit <span className="ml-1 font-mono text-xs font-medium text-[#8f4859]">{scoreLabel(totalScore)}</span></h2></div></div>
+          <div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f5e9eb] text-[#8f4859]"><ShieldCheck size={17} /></span><div><p className="text-[9px] font-semibold uppercase tracking-[.16em] text-[#a58d91]">Quality assurance</p><h2 className="mt-0.5 text-base font-semibold text-[#332629]">Brand consistency audit</h2></div></div>
           <ChevronDown size={17} className="text-[#a18e92] transition group-open:rotate-180" />
         </summary>
-        <div className="mt-5 grid gap-6 lg:grid-cols-[.7fr_1.3fr]">
-          <div className="space-y-4">
-            {scoreParts.map(([label, score]) => <div key={label}><div className="mb-1 flex justify-between text-[10px]"><span className="font-medium text-[#67595c]">{label} consistency</span><span className="font-mono text-[#8f4859]">{scoreLabel(score)}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-[#eee5e2]"><div className="h-full rounded-full bg-[#8f4859]" style={{ width: `${Math.max(0, Math.min(100, score || 0))}%` }} /></div></div>)}
-          </div>
+        <div className="mt-5">
           <div>
             <div className="mb-3 flex flex-wrap gap-1 border-b border-[#eadfdb]">{AUDIT_FILTERS.map(tab => <button key={tab} type="button" onClick={() => setActiveTab(tab)} aria-pressed={activeTab === tab} className={`px-3 py-2 text-[9px] font-semibold uppercase tracking-wider transition ${activeTab === tab ? 'border-b-2 border-[#8f4859] text-[#6b2438]' : 'text-[#918184] hover:text-[#49383c]'}`}>{tab}</button>)}</div>
             {filteredChecks.length ? <div className="divide-y divide-[#f0e8e5]">{filteredChecks.map((item, index) => <div key={`${item.rule}-${index}`} className="flex gap-3 py-3"><span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] ${item.passed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>{item.passed ? '✓' : '!'}</span><div className="min-w-0"><p className="text-[11px] font-semibold text-[#49383c]">{item.rule}</p><p className="mt-1 text-[10px] leading-4 text-[#857679]">{item.detail}</p></div><span className="ml-auto shrink-0 text-[8px] font-semibold uppercase tracking-wider text-[#a18e92]">{item.category}</span></div>)}</div> : <p className="py-5 text-xs text-[#857679]">No audit results yet. Your identity files are still ready in the brand kit.</p>}
